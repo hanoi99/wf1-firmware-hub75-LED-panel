@@ -1,171 +1,190 @@
-# WF1 LED Matrix Firmware
+# WF1 LED-Matrix-Firmware
 
-Eigene Firmware für den **Huidu WF1 (ESP32-S2)** und ein 64×64-HUB75-Panel. Das Projekt wird lokal mit PlatformIO entwickelt. Die Firmware startet jeweils genau eine ausgewählte Szene; diese bleibt aktiv, bis eine andere Szene gewählt wird. Die Auswahl und wichtige Einstellungen werden in NVS gespeichert.
+Eigene Firmware für den **Huidu HD-WF1 (ESP32-S2)** mit einem 64×64-HUB75-LED-Panel. Das Projekt wird mit PlatformIO entwickelt. Die Firmware ist modular aufgebaut: `SceneManager` verwaltet die Szenen, Display-, Netzwerk-, Zeit- und Speicherfunktionen sind voneinander getrennt.
 
-> Stand `0.2.0-dev`: Alle Szenen aus dem Entwicklungsplan sind implementiert. Sie wurden im Host-Simulator (`tools/sim`) und per Syntaxprüfung getestet, **aber noch nicht auf echter Hardware und nicht mit PlatformIO gebaut** (siehe „Prüfung“).
+> **Projektstatus (Stand: 07.11.2026):** Host-Simulator, Firmware-Syntaxprüfung, vollständiger PlatformIO-Build und LittleFS-Build waren erfolgreich. Ein Test auf dem tatsächlichen WF1-Board steht noch aus. Vor dem ersten Flashen muss die Originalfirmware gesichert und der Recovery-Weg geprüft werden.
 
 ## Funktionen
 
-**Szenen** (immer genau eine aktiv, Auswahl wird gespeichert):
+Es ist jeweils eine Szene aktiv. Die Auswahl und wesentliche Einstellungen werden in NVS gespeichert.
 
-| ID | Szene | Einstellungen (Auswahl) |
+| ID | Szene | Beschreibung |
 |---|---|---|
-| `text` | Text | 10 Schriftarten (inkl. Umlaute), Größe, Laufrichtung (←, →, ↑, ↓, statisch, pendeln), Geschwindigkeit, Effekt (blinken, pulsieren, Regenbogen, Verlauf), Farbe, Hintergrund; mehrzeilig |
-| `clock` | Uhr | digital oder analog, 12/24 h, Sekunden, Farbe |
-| `world` | Weltzeituhr | Weltkarte mit Tag/Nacht-Schattierung und Terminator-Kurve, Sonnenposition, Lokalzeit/UTC |
-| `iss` | ISS-Tracker | Live-Position (Open-Notify-API), Bahnkurve, Tag/Nacht, Koordinaten, „über Land/Meer“ |
-| `fire` | Lagerfeuer | Palette, Flammenhöhe, Holzscheite, Funken |
-| `rain` | Matrix-Regen | Farbe, Geschwindigkeit |
-| `stars` | Sternenhimmel | funkelnde Sterne, Milchstraße, Sternschnuppen |
-| `warp` | Hyperraum | Geschwindigkeit, Schweif |
-| `plasma` | Plasma | Palette, Geschwindigkeit, Skalierung |
-| `ascii` | ASCII-Art | Plasma/Feuer/Tunnel aus Zeichen, Farbe |
-| `mandel` | Mandelbrot | Zoom-Fahrt zu 4 Zielen, Palette |
+| `text` | Text | Mehrzeiliger Text, verschiedene Schriftarten, Größe, Farbe, Hintergrund, Laufrichtung und Effekte |
+| `clock` | Uhr | Digitale/analoge Uhr mit konfigurierbarer Darstellung |
+| `world` | Weltzeituhr | Weltkarte mit Tag-/Nacht-Darstellung und Sonnen-Terminator |
+| `iss` | ISS-Tracker | Darstellung der aktuellen ISS-Position und ihrer Umlaufbahn; benötigt Netzwerkzugriff |
+| `fire` | Feuer | Animierte Flammen mit konfigurierbarer Darstellung |
+| `rain` | Digital Rain | Matrix-Regen mit Farbe und Geschwindigkeit |
+| `stars` | Sternenhimmel | Sterne, Milchstraße und Sternschnuppen |
+| `warp` | Warp | Hyperraum-/Warp-Animation |
+| `plasma` | Plasma | Animiertes Plasma mit Paletten und Parametern |
+| `ascii` | ASCII-Art | Grafikeffekte als ASCII-Zeichen |
+| `mandel` | Mandelbrot | Animierte Zoomfahrt durch die Mandelbrot-Menge |
 
-**Demo-Modus:** wechselt automatisch zwischen frei wählbaren Szenen (Intervall einstellbar); Szenen ohne Daten (ISS ohne Netz, Uhr ohne Zeit) werden übersprungen. Eine manuell gewählte Szene beendet die Demo.
+Zusätzlich gibt es einen Demo-Modus, eine Weboberfläche, WLAN-Konfiguration, persistente Einstellungen sowie eine BM8563-RTC-/NTP-Zeitversorgung.
 
-**Weiteres:** Weboberfläche aus LittleFS · WLAN-Einrichtung über die Weboberfläche mit Access-Point-Fallback `LED-Matrix-Setup` · optionales Web-Passwort · Double-Buffering (kein Flackern) · ISS-Abruf in eigenem Task (blockiert die Anzeige nicht) · Boot-Loop-Schutz (nach 3 Abstürzen in Folge startet eine sichere Szene) · alle Einstellungen in NVS · BM8563-RTC + NTP.
+## Hardware und Voraussetzungen
 
-## Voraussetzungen
+- Huidu HD-WF1 mit ESP32-S2 und 4 MB Flash
+- Ein 64×64-HUB75-Panel (die Pin- und Displayparameter sind in `src/board/` konfiguriert)
+- Separate, ausreichend dimensionierte 5-V-Versorgung für das LED-Panel
+- VS Code mit PlatformIO oder PlatformIO Core CLI
+- Python 3 für die Entwicklungswerkzeuge
+- C++-Compiler (z. B. `g++`) für den Host-Simulator und `fwcheck`
 
-- VS Code mit PlatformIO
-- Huidu WF1 (ESP32-S2)
-- 64×64 HUB75-Panel
-- Separate, ausreichend dimensionierte 5-V-Versorgung für das Panel; die Stromversorgung muss zur Matrix passen
+Die PlatformIO-Konfiguration verwendet `esp32-s2-saola-1` als ESP32-S2-Boardprofil und aktiviert die WF1-Konfiguration über `-DWF1=1`. Die tatsächliche WF1-Pinbelegung ist im Projekt hinterlegt. Ein erfolgreicher Compile bestätigt noch nicht die elektrische oder zeitliche Kompatibilität mit dem konkreten WF1-Board und Panel.
 
-## Lokal verwaltete Bibliotheken
+## Projekt einrichten und bauen
 
-Die vom Firmware-Code verwendeten Arduino-Bibliotheken liegen unter `lib/` und
-werden nicht bei jedem Build von ihren Upstream-Git-Repositories geladen. Zum
-Übergang werden die exakt aufgelösten Versionen aus dem bestehenden
-PlatformIO-Cache übernommen:
-
-```bash
-bash scripts/vendor-dependencies.sh
-```
-
-Das Skript kopiert HUB75-DMA, BM8563 RTC, Adafruit GFX und Adafruit BusIO aus
-`.pio/libdeps/huidu_hd_wf1` nach `lib/`. Deshalb muss mindestens ein
-erfolgreicher PlatformIO-Build mit diesen Abhängigkeiten zuvor erfolgt sein.
-Die Original-Manifeste, Copyright-Hinweise und Lizenzdateien werden mitkopiert.
-Details stehen in `third_party/THIRD_PARTY_NOTICES.md`.
-
-Die ESP32-Platform, das Arduino-Framework und der Compiler bleiben bewusst
-separat und sind in `platformio.ini` auf den getesteten Platform-Commit
-gepinnt. Das ist Build-Infrastruktur und keine zur Laufzeit geladene
-Anwendungsbibliothek.
-
-## Auf ein bestehendes geklontes Repository anwenden
-
-Das ursprüngliche Refactor-Paket enthält die neue Projektstruktur auf der Archivebene (ohne `.git`). Im Stammverzeichnis deines bestehenden Klons entpacken und das Migrationsskript einmalig ausführen:
-
-```bash
-unzip -o wf1-project-refactor-v0.1.0.zip -d .
-bash scripts/migrate-refactor.sh
-```
-
-Für nachfolgende Updates genügt es, das jeweilige Update-ZIP im Projektstamm zu entpacken. Das bestehende `.git`-Verzeichnis und deine lokale `src/secrets.h` bleiben dabei erhalten.
-
-Das Skript übernimmt vorhandene Zugangsdaten aus `src/wf1wf2demo/secrets.h` nach `src/secrets.h`, sofern die neue Datei noch nicht existiert, und entfernt danach den alten, nicht mehr benötigten monolithischen Quellcodeordner. Die alte Hauptdatei bleibt zusätzlich unter `reference/legacy/` als nicht mitgebauter Vergleich erhalten.
-
-## WLAN einrichten
-
-Die Datei `src/secrets.h.example` nach `src/secrets.h` kopieren und Zugangsdaten eintragen:
-
-```cpp
-#define WIFI_SSID "dein-wlan"
-#define WIFI_PASS "dein-passwort"
-```
-
-`src/secrets.h` ist in `.gitignore` eingetragen und wird nicht in Git übernommen. Ohne Zugangsdaten kompiliert die Firmware, bleibt aber offline.
-
-## Kompilieren
+Repository klonen und in den Projektordner wechseln. Danach im Projektstamm:
 
 ```bash
 pio run -e huidu_hd_wf1
 ```
 
-## LittleFS-Weboberfläche übertragen
+Damit wird die Firmware kompiliert und `firmware.bin` erzeugt.
 
-Die Webdateien liegen in `data/`. Nach der Firmware-Partitionierung müssen sie einmalig auf das LittleFS-Dateisystem übertragen werden:
+Die Weboberfläche liegt in `data/` und wird separat als LittleFS-Dateisystem-Image gebaut:
 
 ```bash
-pio run -e huidu_hd_wf1 -t uploadfs
+pio run -e huidu_hd_wf1 -t buildfs
 ```
 
-Das Übertragen des Dateisystems ist getrennt vom Firmware-Upload. Beim lokalen Entwickeln können die Webdateien geändert und erneut mit `uploadfs` übertragen werden.
+`buildfs` erstellt nur das Dateisystem-Image. Es überträgt noch nichts auf den Controller. Das Übertragen von Firmware und Dateisystem (`upload` bzw. `uploadfs`) schreibt Flash-Speicher und darf erst nach Backup und bestätigter Hardware-/Recovery-Prozedur erfolgen.
 
-## Lokaler Zugriff
+### Build-Konfiguration
 
-Im selben Netzwerk:
+- PlatformIO-Umgebung: `huidu_hd_wf1`
+- ESP32-Plattform: auf einen konkreten Git-Commit in `platformio.ini` festgelegt
+- Framework: Arduino
+- Dateisystem: LittleFS
+- Partitionslayout: `partitions.csv` (4-MB-Layout mit zwei OTA-App-Slots)
+- Alternative ohne OTA: `partitions_noota.csv` (größerer App-Bereich, kein zweiter OTA-Slot)
+- Lokal eingebundene Arduino-Bibliotheken: `lib/`
 
-- `http://ledmatrix.local/` (mDNS; je nach Betriebssystem/Netzwerkunterstützung)
-- alternativ `http://<IP-Adresse-des-WF1>/`
+Die Bibliotheken liegen bereits im Repository. Das Skript `scripts/vendor-dependencies.sh` ist ein Wartungswerkzeug zum Übernehmen zuvor aufgelöster Bibliotheken aus dem PlatformIO-Cache; es gehört nicht zum normalen Build-Ablauf.
 
-API (Formulardaten `application/x-www-form-urlencoded`):
+## WLAN und Zugangsdaten
 
-- `GET /api/status` – alles: Szenen samt Optionen, Helligkeit, Demo, Speicher, WLAN
-- `POST /api/scene` `id=<szene>`
-- `POST /api/option` `scene`, `key`, `value`
-- `POST /api/text` `text` (max. 240 Bytes, UTF-8)
-- `POST /api/brightness` `value` 1–180
-- `POST /api/demo` `enabled`, `seconds`, `ids` (kommagetrennt)
-- `GET/POST /api/wifi`, `POST/GET /api/wifi/scan`
+WLAN-Zugangsdaten können auf zwei Arten bereitgestellt werden:
 
-## Architektur
+1. **Über die Weboberfläche:** Ohne gespeicherte WLAN-Zugangsdaten startet das Gerät den Setup-Access-Point `LED-Matrix-Setup`. Die Zugangsdaten können anschließend über die Weboberfläche gespeichert werden. Sie werden in NVS abgelegt.
+2. **Beim Kompilieren:** `src/secrets.h.example` nach `src/secrets.h` kopieren und dort optional `WIFI_SSID` und `WIFI_PASS` eintragen.
+
+```bash
+cp src/secrets.h.example src/secrets.h
+```
+
+`src/secrets.h` ist durch `.gitignore` vom Git-Tracking ausgeschlossen. **Echte WLAN-Passwörter oder andere Zugangsdaten niemals committen oder in Issues/Logs veröffentlichen.**
+
+Optionale Sicherheitsparameter in `src/secrets.h`:
+
+```cpp
+#define AP_PASS  "eigenes-setup-passwort"  // Passwort des Setup-AP (mind. 8 Zeichen)
+#define WEB_PASS "eigenes-web-passwort"    // HTTP-Basic-Auth, Benutzername: admin
+```
+
+Ohne gesetztes `WEB_PASS` ist die Weboberfläche nicht durch eine Anmeldung geschützt. Vor einem regulären Betrieb sollten ein eigenes `AP_PASS` und `WEB_PASS` gesetzt werden. Das Gerät nicht per Portfreigabe direkt aus dem Internet erreichbar machen.
+
+## Weboberfläche und API
+
+Die Weboberfläche wird aus LittleFS ausgeliefert. Im lokalen Netzwerk ist sie – sofern mDNS unterstützt wird – unter `http://ledmatrix.local/` oder alternativ über die IP-Adresse des WF1 erreichbar.
+
+Die Firmware stellt unter anderem folgende HTTP-Endpunkte bereit. POST-Daten werden als `application/x-www-form-urlencoded` gesendet.
+
+| Methode | Endpunkt | Zweck |
+|---|---|---|
+| `GET` | `/api/status` | Status, aktive Szene, Szenenoptionen, Helligkeit, Demo- und Systemdaten |
+| `POST` | `/api/scene` | Szene wählen (`id`) |
+| `POST` | `/api/option` | Szenenoption ändern (`scene`, `key`, `value`) |
+| `POST` | `/api/text` | Anzeigetext setzen (`text`, maximal 240 UTF-8-Bytes) |
+| `POST` | `/api/brightness` | Helligkeit setzen (`value`, 1 bis zum konfigurierten Maximum) |
+| `POST` | `/api/demo` | Demo-Modus konfigurieren (`enabled`, `interval`, `ids`) |
+| `GET` / `POST` | `/api/wifi` | WLAN-Status abrufen bzw. Zugangsdaten speichern (`ssid`, `pass`) |
+| `POST` | `/api/wifi/scan` | WLAN-Suche starten |
+| `GET` | `/api/wifi/scan` | Ergebnis der WLAN-Suche abrufen |
+
+## Tests und Entwicklung ohne Hardware
+
+### Host-Simulator
+
+Der Host-Simulator kompiliert echte Szenen-Quelldateien mit kleinen Hardware-Stubs. Er ist für Szenen- und Logiktests gedacht, ersetzt aber weder den ESP32-Build noch einen Test am echten Panel.
+
+```bash
+bash tools/sim/build.sh
+build/sim selftest
+```
+
+Optional können mit `tools/sim/render_sheet.py` Szenenbilder gerendert werden. Die genauen Argumente stehen im Skript bzw. in dessen Hilfe.
+
+### Firmware-Syntaxprüfung
+
+```bash
+bash tools/fwcheck.sh
+```
+
+Diese Prüfung untersucht Firmware-Dateien, die der Host-Simulator nicht vollständig abdeckt, anhand von Stub-Headern. Sie ersetzt keinen echten PlatformIO-Build.
+
+### UI-Mockserver
+
+Unter `tools/ui_mock/` liegt ein Mockserver für die Weboberfläche. Die aktuelle Mockserver-Version ist noch nicht vollständig mit der Firmware-API bzw. dem aktuellen Simulator synchronisiert und gilt daher **nicht als bestandener Integrationstest**. Vor einer Verwendung muss sie angepasst und separat getestet werden.
+
+### Zuletzt bekannte Prüfergebnisse
+
+Am 07.11.2026 wurden folgende Ergebnisse erzielt:
+
+| Prüfung | Ergebnis |
+|---|---|
+| Host-Simulator-Build und `selftest` | Erfolgreich |
+| `tools/fwcheck.sh` | `fwcheck: OK` |
+| `pio run -e huidu_hd_wf1` | `SUCCESS` |
+| `pio run -e huidu_hd_wf1 -t buildfs` | `SUCCESS` |
+
+Der PlatformIO-Build meldete 726.991 Bytes von 1.310.720 Bytes App-Partitionsgröße (55,5 %) und 60.544 Bytes von 327.680 Bytes RAM (18,5 %). Das erzeugte LittleFS-Image war 1.441.792 Bytes groß – entsprechend der Größe der dafür vorgesehenen Partition. Die Imagegröße ist nicht mit der tatsächlichen Belegung durch Webdateien gleichzusetzen.
+
+**Noch nicht geprüft:** Start der Firmware auf dem WF1, tatsächliche HUB75-Ausgabe, Display-Timing/Treiberchip, WLAN-Verhalten am Gerät, Weboberfläche am Gerät und Recovery nach einem fehlgeschlagenen Flash.
+
+## Hardwarehinweise und erstes Flashen
+
+- Vor dem ersten Flashen die Originalfirmware des WF1 vollständig sichern.
+- Flash-ID und tatsächliche Flashgröße auslesen, bevor ein Schreibvorgang erfolgt.
+- Pinbelegung, Panel-Scanrate, Shift-Register-Treiber und Stromversorgung am konkreten Board/Panel verifizieren.
+- Die Helligkeit ist in `src/board/BoardConfig.h` konservativ begrenzt. Diese Grenze nicht erhöhen, bevor die Panelversorgung geprüft wurde.
+- `PANEL_DRIVER` steht derzeit auf dem generischen Treiberwert. Bei dunklem oder fehlerhaftem Bild muss der tatsächliche Shift-Register-Typ des Panels ermittelt werden; nicht blind verschiedene Werte flashen.
+
+Ein Flash-Vorgang überschreibt Speicher auf dem Controller. Deshalb erst nach geprüftem Backup und geklärtem Recovery-Weg fortfahren. Die passenden Verbindungs- und Boot-Pads hängen von der konkreten WF1-Hardware-Revision ab.
+
+## Projektstruktur
 
 ```text
-src/
-├── main.cpp                 # Zusammensetzen und Start der Anwendung
-├── app/                     # SceneManager
-├── board/                   # WF1-Pins und Displayparameter
-├── display/                 # HUB75-DMA-Abstraktion
-├── network/                 # WLAN und HTTP-Weboberfläche/API
-├── scenes/                  # Display-Szenen (je begin/update/end + Optionen)
-├── services/                # Zeit, ISS-Abruf/-Bahn, Sonnenstand, Weltkarte
-└── storage/                 # Persistente Einstellungen (NVS)
-
-data/
-├── index.html
-├── style.css
-└── app.js
+wf1/
+├── data/                 Weboberfläche (LittleFS)
+├── include/              optionale öffentliche Header
+├── lib/                  lokal eingebundene Drittanbieter-Bibliotheken
+├── scripts/              Wartungs- und Build-Hilfsskripte
+├── specification/        Huidu-Dokumentation
+├── src/
+│   ├── app/              Szenenverwaltung
+│   ├── board/            Board-, Pin- und Displaykonfiguration
+│   ├── display/          HUB75-Treiberabstraktion und Text-Rendering
+│   ├── network/          WLAN und HTTP-API
+│   ├── scenes/           einzelne Display-Szenen
+│   ├── services/         Zeit, ISS und Sonnenberechnung
+│   ├── storage/          persistente Einstellungen (NVS)
+│   └── main.cpp          Einstiegspunkt und Zusammensetzen der Anwendung
+├── test/                 PlatformIO-Testbereich / Hardwaretests
+├── third_party/          Drittanbieter-Hinweise und Lizenzen
+└── tools/
+    ├── fwcheck.sh        Firmware-Syntaxprüfung
+    ├── sim/              Host-Simulator und Stubs
+    └── ui_mock/          Mockserver (derzeit in Überarbeitung)
 ```
 
-Jede Szene implementiert `begin()`, `update()` und `end()`. `SceneManager` aktiviert genau eine Szene. Neue Szenen werden registriert und müssen weder den Webserver noch die Displayinitialisierung kennen.
+## Weltkarten-Konfiguration
 
-## Technische Hinweise
+Der Heimatmarker und die Zeitzone werden in `src/board/BoardConfig.h` konfiguriert (`HOME_LAT`, `HOME_LON`, `TIMEZONE`). Vor dem Einsatz die Standardkoordinaten anpassen.
 
-- Das Projekt zielt derzeit explizit auf den WF1. Die WF2-Pindatei bleibt als Referenz im Repository, wird aber nicht mitgebaut.
-- Die Helligkeit ist bewusst auf 180/255 begrenzt. Vor einer Erhöhung muss die tatsächliche Panelversorgung sicher dimensioniert sein.
-- Die Animationen sind auf 64×64 Pixel und die begrenzten Ressourcen des ESP32-S2 ausgelegt. Neue Szenen sollten zeitgesteuert und ohne blockierende `delay()`-Schleifen arbeiten.
-- Die Uhrzeit wird intern als UTC geführt; `CET/CEST` wird nur für die lokale Anzeige angewendet.
-- Die Weboberfläche hat in dieser Entwicklungsstufe noch keine Anmeldung. Sie ist nur für ein vertrauenswürdiges lokales Netzwerk gedacht; keine Portfreigabe ins Internet einrichten.
-- Kein OTA-Update ist aktiviert. Firmware-Upload und Flashen am WF1 erfolgen erst nach gesonderter Prüfung der passenden WF1-Revision und des Backup-/Recovery-Wegs.
+## Lizenzen und Drittanbieter
 
-## Herkunft und Danksagung
-
-Die WF1-Pinbelegung, die ursprüngliche HUB75-DMA-Integration und Teile der Geräteintegration wurden durch das Projekt [HD-WF1-WF2-LED-MatrixPanel-DMA](https://github.com/mrcodetastic/HD-WF1-WF2-LED-MatrixPanel-DMA) angeregt. Vielen Dank an MrCodetastic und die Maintainer der verwendeten Open-Source-Bibliotheken. Die frühere Demo-Datei liegt zur Referenz unter `reference/legacy/wf1wf2demo.cpp`; sie wird nicht kompiliert. Die vollständigen Drittanbieter-Hinweise, Versionen und Lizenzen stehen in `third_party/THIRD_PARTY_NOTICES.md`.
-
-## Prüfung ohne Hardware
-
-```bash
-bash tools/sim/build.sh && build/sim selftest          # Szenen im Host-Simulator
-python3 tools/sim/render_sheet.py out.png work "Feuer|fire|6000|3000"   # Bilder rendern
-bash tools/fwcheck.sh                                  # Typprüfung WLAN/Web/Tasks gegen Stubs
-python3 tools/gen_worldmap.py ne_110m_land.geojson src/data/WorldMapData.h   # Karte neu erzeugen
-```
-
-Der Simulator kompiliert die echten Szenen-Quelldateien. Er ersetzt keinen PlatformIO-Build: Flash-Größe (App-Partition 1,25 MB, siehe `partitions_noota.csv`), Speicherbedarf und Timing auf dem ESP32-S2 sind ungeprüft.
-
-## Erstes Flashen
-
-Beim ersten Flashen wird die Huidu-Originalfirmware überschrieben. Vorher ein Backup ziehen (Port anpassen) und die Flash-Größe prüfen:
-
-```bash
-esptool.py --chip esp32s2 --port COMx flash_id
-esptool.py --chip esp32s2 --port COMx read_flash 0 0x400000 wf1-backup.bin
-```
-
-Danach `pio run -t upload` und `pio run -t uploadfs` (Weboberfläche). Zeigt das Panel Müll, in `DisplayDriver.cpp` den Treiberchip setzen (`config.driver`, z. B. `FM6126A` oder `ICN2038S`).
-
-Heimatstandort für die Karten-Markierung: `HOME_LAT/HOME_LON` in `src/board/BoardConfig.h` (Standard: Berlin).
+Projektlizenz und Drittanbieter-Lizenzen sind in `LICENSE`, `third_party/THIRD_PARTY_NOTICES.md` sowie den jeweiligen Bibliotheksverzeichnissen unter `lib/` dokumentiert. Copyright- und Lizenzdateien der eingebundenen Bibliotheken beim Aktualisieren beibehalten.

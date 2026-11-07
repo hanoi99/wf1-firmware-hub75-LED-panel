@@ -1,8 +1,0 @@
-WF1 firmware update 0.1.2-dev
-
-Fixes:
-- Adds the missing hexColor(uint32_t) helper in WebController.cpp.
-- Formats the stored RGB color as #RRGGBB for the web color input.
-
-Apply this patch by extracting the ZIP into the PlatformIO project root.
-No firmware is flashed by this patch.
