@@ -1,0 +1,29 @@
+# PlatformIO
+.pio/
+.piolibdeps/
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
+
+# Secrets / Credentials
+secrets.h
+.env
+.env.*
+!.env.example
+
+# Temporary files
+*.log
+*.tmp
+# Unused vendor library content
+lib/*/examples/
+lib/*/doc/
+lib/*/testing/
+lib/*/.github/
+
+# Vendor library metadata not needed by PlatformIO
+lib/*/.piopm
+
+# Generated build artifacts
+/build/
