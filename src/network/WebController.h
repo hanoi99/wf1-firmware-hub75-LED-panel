@@ -34,6 +34,7 @@ private:
     void sendError(int statusCode, const char* message);
     void serveFile();
     void sendStatus();
+    void sendState();
     void setScene();
     void setOption();
     void setText();
@@ -44,4 +45,8 @@ private:
     void postWifiScan();
     void getWifiScan();
     void appendScene(String& json, IScene& scene);
+    void wifiJson(String& json);
+
+    bool scanning_ = false;
+    String networks_ = "[]";
 };

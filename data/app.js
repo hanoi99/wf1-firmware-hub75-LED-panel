@@ -80,7 +80,7 @@ function renderDemo() {
   const d = status.demo;
   $('#demo-on').checked = d.on;
   if (document.activeElement !== $('#demo-sec')) { $('#demo-sec').value = d.sec; $('#demo-sec-out').textContent = d.sec; }
-  const ids = d.ids.split(',');
+  const ids = d.ids ? d.ids.split(',') : status.scenes.map((s) => s.id);  // leer = alle Szenen
   const box = $('#demo-ids');
   box.replaceChildren(...status.scenes.map((s) => {
     const l = document.createElement('label'); l.className = 'chip';

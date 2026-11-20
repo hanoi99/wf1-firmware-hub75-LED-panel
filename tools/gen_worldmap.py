@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Erzeugt src/data/WorldMapData.h (Land/Meer-Maske, 64x26, Equirectangular).
+"""Erzeugt src/data/WorldMap.h (Land/Meer-Maske, 64x26, Equirectangular).
 Quelle: Natural Earth 110m land (Public Domain).
-Aufruf: python3 tools/gen_worldmap.py ne_110m_land.geojson src/data/WorldMapData.h
+Aufruf: python3 tools/gen_worldmap.py ne_110m_land.geojson src/data/WorldMap.h
 """
 import json, sys
 from PIL import Image, ImageDraw
@@ -37,18 +37,14 @@ for y in range(H):
         row += "#" if land else "."
         bits.append(1 if land else 0)
     rows.append(row)
-words = []
-for y in range(H):  # 64 Bit pro Zeile -> 2x uint32 (Bit 0 = linkestes Pixel)
-    lo = sum(bits[y*W + x] << x for x in range(32))
-    hi = sum(bits[y*W + 32 + x] << x for x in range(32))
-    words += [lo, hi]
+data = bytearray((W * H + 7) // 8)
+for i, b in enumerate(bits):
+    if b: data[i >> 3] |= 1 << (i & 7)
 with open(dst, "w") as o:
-    o.write("#pragma once\n// Automatisch erzeugt von tools/gen_worldmap.py - nicht von Hand editieren.\n")
-    o.write("// Natural Earth 110m land (Public Domain). Equirectangular, Lat %+.0f..%+.0f, %dx%d Pixel.\n" % (LAT_TOP, LAT_BOT, W, H))
-    o.write("#include <stdint.h>\nnamespace WorldMap {\nconstexpr int W = %d, H = %d;\nconstexpr float LAT_TOP = %.1ff, LAT_BOT = %.1ff;\n" % (W, H, LAT_TOP, LAT_BOT))
-    o.write("// Zeile y: Wort 2y = Pixel 0..31, Wort 2y+1 = Pixel 32..63 (Bit 0 = links)\n")
-    o.write("static const uint32_t LAND[%d] = {\n" % len(words))
-    for i in range(0, len(words), 4):
-        o.write("  " + ", ".join("0x%08X" % w for w in words[i:i+4]) + ",\n")
-    o.write("};\ninline bool isLand(int x, int y) {\n  if (x < 0 || x >= W || y < 0 || y >= H) return false;\n  return (LAND[y * 2 + (x >> 5)] >> (x & 31)) & 1;\n}\n}\n")
+    o.write("// Generiert von tools/gen_worldmap.py (Natural Earth, Public Domain). Nicht von Hand editieren.\n")
+    o.write("#pragma once\n#include <stdint.h>\nnamespace WorldMap {\n")
+    o.write("constexpr int W = %d, H = %d;\nconstexpr float LAT_TOP = %.1ff, LAT_BOT = %.1ff;\n" % (W, H, LAT_TOP, LAT_BOT))
+    o.write("// Bit i = y*W+x, LSB zuerst; 1 = Land\n")
+    o.write("static const uint8_t LAND[] = {" + ",".join(str(b) for b in data) + "};\n")
+    o.write("inline bool isLand(int x, int y) { int i = y*W+x; return LAND[i>>3] & (1<<(i&7)); }\n}\n")
 print("\n".join(rows))

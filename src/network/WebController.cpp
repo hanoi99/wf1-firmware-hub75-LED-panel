@@ -6,6 +6,7 @@
 
 #include "app/OptionKeys.h"
 #include "board/BoardConfig.h"
+#include "data/WebUiData.h"
 
 #if __has_include("../secrets.h")
   #include "../secrets.h"
@@ -15,7 +16,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.2.0-dev"
+#define APP_VERSION "0.2.3-dev"
 #endif
 
 namespace {
@@ -86,6 +87,7 @@ void WebController::begin() {
     route("/style.css", HTTP_GET, &WebController::serveFile);
     route("/app.js", HTTP_GET, &WebController::serveFile);
     route("/api/status", HTTP_GET, &WebController::sendStatus);
+    route("/api/state", HTTP_GET, &WebController::sendState);
     route("/api/scene", HTTP_POST, &WebController::setScene);
     route("/api/option", HTTP_POST, &WebController::setOption);
     route("/api/text", HTTP_POST, &WebController::setText);
@@ -115,35 +117,42 @@ void WebController::sendError(int statusCode, const char* message) {
 void WebController::serveFile() {
     String path = server_.uri();
     if (path == "/") path = "/index.html";
-    if (path != "/index.html" && path != "/style.css" && path != "/app.js") {
+    const WebAsset* asset = nullptr;
+    for (size_t i = 0; i < WEBUI_ASSET_COUNT; ++i)
+        if (path == WEBUI_ASSETS[i].path) asset = &WEBUI_ASSETS[i];
+    if (!asset) {
         server_.send(404, "text/plain; charset=utf-8", "Not found");
         return;
     }
+#ifdef WEB_UI_FROM_FS
+    // Entwicklungsmodus: Dateien aus LittleFS (pio run -t uploadfs) statt der eingebetteten Kopie
     File file = LittleFS.open(path, "r");
-    if (!file) {
-        server_.send(404, "text/plain; charset=utf-8",
-                     "Web UI files missing. Run: pio run -t uploadfs");
+    if (file) {
+        server_.sendHeader("Cache-Control", "no-cache");
+        server_.streamFile(file, asset->mime);
+        file.close();
         return;
     }
+#endif
     server_.sendHeader("Cache-Control", "no-cache");
     server_.sendHeader("X-Content-Type-Options", "nosniff");
-    server_.streamFile(file, mimeType(path));
-    file.close();
+    server_.sendHeader("Content-Encoding", "gzip");
+    server_.send_P(200, asset->mime, reinterpret_cast<const char*>(asset->data), asset->len);
 }
 
 void WebController::appendScene(String& json, IScene& scene) {
     json += "{\"id\":\"" + String(scene.id()) + "\",\"title\":\"" + jsonEscape(scene.title()) +
             "\",\"cat\":\"" + scene.category() + "\",\"avail\":" + (scene.available() ? "true" : "false") +
-            ",\"options\":[";
+            ",\"opts\":[";
     for (uint8_t i = 0; i < scene.optionCount(); ++i) {
         const SceneOption* o = scene.option(i);
         if (i) json += ",";
         const char* type = o->type == OptType::Select ? "select" : o->type == OptType::Range ? "range"
                          : o->type == OptType::Toggle ? "toggle" : "color";
-        json += "{\"key\":\"" + String(o->key) + "\",\"label\":\"" + jsonEscape(o->label) +
-                "\",\"type\":\"" + type + "\",\"min\":" + String(o->min) + ",\"max\":" + String(o->max) +
-                ",\"value\":" + String(o->value);
-        if (o->choices) json += ",\"choices\":\"" + jsonEscape(o->choices) + "\"";
+        json += "{\"k\":\"" + String(o->key) + "\",\"l\":\"" + jsonEscape(o->label) +
+                "\",\"t\":\"" + type + "\",\"min\":" + String(o->min) + ",\"max\":" + String(o->max) +
+                ",\"v\":" + String(o->value);
+        if (o->choices) json += ",\"c\":\"" + jsonEscape(o->choices) + "\"";
         json += "}";
     }
     json += "]}";
@@ -151,31 +160,44 @@ void WebController::appendScene(String& json, IScene& scene) {
 
 void WebController::sendStatus() {
     String json;
-    json.reserve(5200);
+    json.reserve(4600);
+    const DemoConfig& demo = scenes_.demo();
     json += "{\"version\":\"" APP_VERSION "\"";
-    json += ",\"uptime\":" + String(millis() / 1000);
-    json += ",\"heap\":" + String(ESP.getFreeHeap());
-    json += ",\"minHeap\":" + String(ESP.getMinFreeHeap());
-    json += ",\"ip\":\"" + network_.ipAddress() + "\"";
-    json += ",\"wifi\":" + String(network_.connected() ? "true" : "false");
-    json += ",\"ap\":" + String(network_.apActive() ? "true" : "false");
-    json += ",\"rssi\":" + String(network_.rssi());
-    json += ",\"timeValid\":" + String(time_.isValid() ? "true" : "false");
-    json += ",\"doubleBuffer\":" + String(display_.doubleBuffered() ? "true" : "false");
-    json += ",\"activeScene\":\"" + String(scenes_.activeId()) + "\"";
-    json += ",\"activeTitle\":\"" + jsonEscape(scenes_.activeTitle()) + "\"";
+    json += ",\"scene\":\"" + String(scenes_.activeId()) + "\"";
     json += ",\"brightness\":" + String(display_.brightness());
     json += ",\"maxBrightness\":" + String(BoardConfig::MAX_BRIGHTNESS);
-    const DemoConfig& demo = scenes_.demo();
-    json += ",\"demo\":{\"enabled\":" + String(demo.enabled ? "true" : "false") +
-            ",\"interval\":" + String(demo.intervalSec) + ",\"ids\":\"" + jsonEscape(demo.ids) + "\"}";
+    json += ",\"maxText\":" + String(SettingsStore::MAX_TEXT_BYTES);
     json += ",\"text\":\"" + jsonEscape(textScene_.text()) + "\"";
+    json += ",\"demo\":{\"on\":" + String(demo.enabled ? "true" : "false") +
+            ",\"sec\":" + String(demo.intervalSec) + ",\"ids\":\"" + jsonEscape(demo.ids) + "\"}";
+    json += ",\"sys\":{\"ip\":\"" + network_.ipAddress() + "\"";
+    json += ",\"heap\":" + String(ESP.getFreeHeap());
+    json += ",\"minHeap\":" + String(ESP.getMinFreeHeap());
+    json += ",\"up\":" + String(millis() / 1000);
+    json += ",\"rssi\":" + String(network_.rssi());
+    json += ",\"wifi\":" + String(network_.connected() ? "true" : "false");
+    json += ",\"ap\":" + String(network_.apActive() ? "true" : "false");
+    json += ",\"time\":" + String(time_.isValid() ? "true" : "false");
+    json += ",\"fs\":" + String(LittleFS.totalBytes() > 0 ? "true" : "false");
+    json += ",\"db\":" + String(display_.doubleBuffered() ? "true" : "false") + "}";
     json += ",\"scenes\":[";
     for (uint8_t i = 0; i < scenes_.count(); ++i) {
         if (i) json += ",";
         appendScene(json, *scenes_.at(i));
     }
     json += "]}";
+    sendJson(200, json);
+}
+
+// Leichter Abruf fuer das regelmaessige Polling der Weboberflaeche (alle 4 s).
+void WebController::sendState() {
+    IScene* cur = scenes_.active();
+    String json = "{\"scene\":\"" + String(scenes_.activeId()) + "\"";
+    json += ",\"demo\":" + String(scenes_.demo().enabled ? "true" : "false");
+    json += ",\"note\":\"" + jsonEscape(cur ? cur->info() : String()) + "\"";
+    json += ",\"heap\":" + String(ESP.getFreeHeap());
+    json += ",\"rssi\":" + String(network_.rssi());
+    json += ",\"up\":" + String(millis() / 1000) + "}";
     sendJson(200, json);
 }
 
@@ -233,9 +255,10 @@ void WebController::setBrightness() {
 
 void WebController::setDemo() {
     DemoConfig cfg = scenes_.demo();
-    if (server_.hasArg("interval")) {
+    const char* secArg = server_.hasArg("sec") ? "sec" : "interval";
+    if (server_.hasArg(secArg)) {
         long sec = 0;
-        if (!parseInt(server_.arg("interval"), 3, 3600, sec)) { sendError(400, "interval must be 3-3600 s"); return; }
+        if (!parseInt(server_.arg(secArg), 3, 3600, sec)) { sendError(400, "interval must be 3-3600 s"); return; }
         cfg.intervalSec = (uint16_t)sec;
     }
     if (server_.hasArg("ids")) {
@@ -243,7 +266,8 @@ void WebController::setDemo() {
         if (!validIdList(ids)) { sendError(400, "invalid scene list"); return; }
         cfg.ids = ids;
     }
-    if (server_.hasArg("enabled")) cfg.enabled = server_.arg("enabled") == "1";
+    const char* onArg = server_.hasArg("on") ? "on" : "enabled";
+    if (server_.hasArg(onArg)) cfg.enabled = server_.arg(onArg) == "1";
     scenes_.setDemo(cfg);
     settings_.saveDemo(cfg.enabled, cfg.intervalSec, cfg.ids);
     if (cfg.enabled) {
@@ -258,11 +282,22 @@ void WebController::setDemo() {
     sendJson(200, "{\"ok\":true}");
 }
 
+void WebController::wifiJson(String& json) {
+    if (scanning_) {
+        const String res = network_.scanJson();   // "null" solange der Scan laeuft
+        if (res != "null") { networks_ = res; scanning_ = false; }
+    }
+    json = String("{\"connected\":") + (network_.connected() ? "true" : "false") +
+           ",\"ap\":" + (network_.apActive() ? "true" : "false") +
+           ",\"ssid\":\"" + jsonEscape(network_.ssid()) + "\",\"ip\":\"" + network_.ipAddress() +
+           "\",\"rssi\":" + String(network_.rssi()) +
+           ",\"scanning\":" + (scanning_ ? "true" : "false") + ",\"networks\":" + networks_ + "}";
+}
+
 void WebController::getWifi() {
-    sendJson(200, String("{\"connected\":") + (network_.connected() ? "true" : "false") +
-                  ",\"ap\":" + (network_.apActive() ? "true" : "false") +
-                  ",\"ssid\":\"" + jsonEscape(network_.ssid()) + "\",\"ip\":\"" + network_.ipAddress() +
-                  "\",\"rssi\":" + String(network_.rssi()) + "}");
+    String json;
+    wifiJson(json);
+    sendJson(200, json);
 }
 
 void WebController::postWifi() {
@@ -275,9 +310,8 @@ void WebController::postWifi() {
 
 void WebController::postWifiScan() {
     network_.startScan();
+    scanning_ = true;
     sendJson(200, "{\"ok\":true}");
 }
 
-void WebController::getWifiScan() {
-    sendJson(200, String("{\"networks\":") + network_.scanJson() + "}");
-}
+void WebController::getWifiScan() { getWifi(); }

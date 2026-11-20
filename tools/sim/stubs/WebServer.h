@@ -16,6 +16,7 @@ public:
     bool hasArg(const String& name) const { return false; }
     String uri() const { return String(); }
     void sendHeader(const String& n, const String& v, bool first = false) {}
+    void send_P(int, const char*, const char*, size_t) {}
     void send(int code, const char* type, const String& content) {}
     void send(int code, const char* type, const char* content) {}
     void send(int code, const String& type, const String& content) {}

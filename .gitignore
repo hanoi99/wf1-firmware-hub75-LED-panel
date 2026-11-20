@@ -24,6 +24,3 @@ lib/*/.github/
 
 # Vendor library metadata not needed by PlatformIO
 lib/*/.piopm
-
-# Generated build artifacts
-/build/

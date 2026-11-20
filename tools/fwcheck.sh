@@ -4,6 +4,7 @@
 # faengt aber Tippfehler und falsche Schnittstellen zwischen den eigenen Klassen ab.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 rc=0
+python3 "$ROOT/tools/check_includes.py" || rc=1
 for f in main.cpp network/WebController.cpp network/NetworkService.cpp services/IssService.cpp \
          services/TimeService.cpp services/SolarCalc.cpp services/IssOrbit.cpp storage/SettingsStore.cpp; do
   out=$(g++ -std=c++17 -fsyntax-only -Wall -Wextra -Wno-unused-parameter -DARDUINO=100 -DWF1=1 \

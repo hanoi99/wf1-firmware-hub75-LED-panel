@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <esp_partition.h>
 #include <esp_random.h>
 #include <esp_system.h>
 
@@ -25,7 +26,7 @@
 #include "storage/SettingsStore.h"
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.2.0-dev"
+#define APP_VERSION "0.2.3-dev"
 #endif
 
 namespace {
@@ -85,8 +86,19 @@ void setup() {
 
     if (!display.begin()) haltWithError("[boot] display initialization failed");
 
-    if (!LittleFS.begin(false))
-        Serial.println("[fs] LittleFS mount failed; web UI files unavailable (run uploadfs)");
+    // Die Weboberflaeche ist in die Firmware eingebettet; LittleFS ist nur optional (WEB_UI_FROM_FS).
+    const esp_partition_t* fsPart =
+        esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, nullptr);
+    if (fsPart)
+        Serial.printf("[fs] data partition '%s' at 0x%06X, size 0x%06X\n", fsPart->label,
+                      (unsigned)fsPart->address, (unsigned)fsPart->size);
+    else
+        Serial.println("[fs] NO spiffs/littlefs partition in the flashed partition table");
+    if (LittleFS.begin(false))
+        Serial.printf("[fs] LittleFS mounted (%u of %u bytes used)\n", (unsigned)LittleFS.usedBytes(),
+                      (unsigned)LittleFS.totalBytes());
+    else
+        Serial.println("[fs] LittleFS mount failed (optional - embedded web UI is used)");
 
     if (!settings.begin()) Serial.println("[settings] NVS unavailable; defaults will be used");
     const uint8_t unstableBoots = settings.noteBoot();
