@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1017">
+  <title>LED Matrix Control</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main class="layout">
+  <header class="topbar">
+    <div><p class="eyebrow">WF1 · 64 × 64</p><h1>Matrix Control</h1></div>
+    <div class="status" id="connection"><span class="dot"></span><span>Verbinde …</span></div>
+  </header>
+
+  <section class="panel current">
+    <div><p class="eyebrow" id="mode-label">AKTIVE SZENE</p><h2 id="active-title">–</h2></div>
+    <span class="live" id="live">LIVE</span>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">SZENEN</p>
+    <div id="scene-groups"><p class="hint">Szenen werden geladen …</p></div>
+  </section>
+
+  <section class="panel" id="settings-panel" hidden>
+    <div class="heading"><div><p class="eyebrow">EINSTELLUNGEN</p><h2 id="settings-title"></h2></div></div>
+    <div id="text-box" hidden>
+      <label for="message">Text <small id="counter"></small></label>
+      <textarea id="message" rows="3" placeholder="Dein Text … (Zeilenumbruch möglich)"></textarea>
+      <button class="primary" id="text-send" type="button">Text anzeigen</button>
+    </div>
+    <div id="options" class="form-grid"></div>
+  </section>
+
+  <section class="panel">
+    <div class="heading"><div><p class="eyebrow">AUTOMATIK</p><h2>Demo-Modus</h2></div>
+      <label class="switch"><input type="checkbox" id="demo-on"><span></span></label></div>
+    <p class="hint">Wechselt automatisch durch die gewählten Szenen. Eine manuelle Szenenwahl beendet die Demo.</p>
+    <label for="demo-sec">Wechsel alle <output id="demo-sec-out">20</output> s</label>
+    <input id="demo-sec" type="range" min="5" max="300" step="5" value="20">
+    <div id="demo-ids" class="chips"></div>
+  </section>
+
+  <section class="panel">
+    <div class="heading"><div><p class="eyebrow">DISPLAY</p><h2>Helligkeit</h2></div><output id="brightness-value">96</output></div>
+    <input id="brightness" type="range" min="1" max="180" value="96">
+    <p class="hint">Obergrenze bewusst begrenzt, bis die Stromversorgung des Panels sicher dimensioniert ist.</p>
+  </section>
+
+  <section class="panel">
+    <div class="heading"><div><p class="eyebrow">DISPLAY</p><h2>Panel-Timing (Flackern)</h2></div><output id="disp-state">–</output></div>
+    <p class="hint" id="disp-info">–</p>
+    <label for="disp-spd">Pixeltakt</label>
+    <select id="disp-spd"><option value="8">8 MHz (ruhigstes Bild)</option><option value="16">16 MHz</option><option value="20">20 MHz (schnellste)</option></select>
+    <label for="disp-lat">Latch-Blanking (0 = automatisch)</label>
+    <input id="disp-lat" type="number" min="0" max="32" value="8">
+    <label for="disp-clk">Takt-Phase</label>
+    <select id="disp-clk"><option value="1">Normal</option><option value="0">Invertiert</option></select>
+    <label for="disp-bits">Farbtiefe (weniger = mehr freier Speicher für WLAN)</label>
+    <select id="disp-bits"><option value="4">4 Bit</option><option value="5">5 Bit</option><option value="6">6 Bit (Standard)</option><option value="7">7 Bit</option><option value="8">8 Bit (nur mit Single Buffer)</option></select>
+    <label for="disp-hz">Min. Bildwiederholrate (höher = weniger RAM)</label>
+    <select id="disp-hz"><option value="60">60 Hz</option><option value="100">100 Hz (Standard)</option><option value="120">120 Hz</option><option value="150">150 Hz</option></select>
+    <label for="disp-db">Double Buffer</label>
+    <select id="disp-db"><option value="1">An (empfohlen)</option><option value="0">Aus</option></select>
+    <button class="primary" id="disp-save" type="button">Speichern &amp; neu starten</button>
+    <button class="ghost" id="disp-reset" type="button">Standardwerte</button>
+    <p class="hint">Aenderungen starten das Board neu (ca. 10 s). Die Einstellung bleibt gespeichert.</p>
+  </section>
+
+  <section class="panel">
+    <div class="heading"><div><p class="eyebrow">NETZWERK</p><h2>WLAN</h2></div><button type="button" id="wifi-scan" class="ghost">Suchen</button></div>
+    <p class="hint" id="wifi-info">–</p>
+    <label for="wifi-ssid">Netzwerk (SSID)</label>
+    <input id="wifi-ssid" list="wifi-list" autocomplete="off" maxlength="32">
+    <datalist id="wifi-list"></datalist>
+    <label for="wifi-pass">Passwort</label>
+    <input id="wifi-pass" type="password" autocomplete="new-password" maxlength="63">
+    <button class="primary" id="wifi-save" type="button">WLAN speichern & verbinden</button>
+    <button class="ghost" id="wifi-forget" type="button">WLAN vergessen &amp; neu starten</button>
+    <p class="hint">Löscht das gespeicherte Heimnetz. Das Board startet neu und öffnet nur das Setup-WLAN „LED-Matrix-Setup“ (192.168.4.1).</p>
+  </section>
+
+  <footer><span>Firmware <span id="version">–</span> · <span id="sys">–</span></span><span id="message-status">Bereit</span></footer>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
